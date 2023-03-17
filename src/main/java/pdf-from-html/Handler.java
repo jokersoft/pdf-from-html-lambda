@@ -1,4 +1,4 @@
-package pdf-from-html;
+package pdfFromHtml;
 
 import com.amazonaws.services.lambda.runtime.Context;
 import com.amazonaws.services.lambda.runtime.RequestHandler;
@@ -9,12 +9,14 @@ import com.google.gson.GsonBuilder;
 
 import java.util.Map;
 
-// Handler value: example.Handler
+// Handler value: pdfFromHtml.Handler
 public class Handler implements RequestHandler<Map<String,String>, String>{
   Gson gson = new GsonBuilder().setPrettyPrinting().create();
   @Override
   public String handleRequest(Map<String,String> event, Context context)
   {
+    Process proc = Runtime.getRuntime().exec("wkhtmltopdf http://google.com google.pdf ");
+
     LambdaLogger logger = context.getLogger();
     String response = "200 OK";
     // log execution details
