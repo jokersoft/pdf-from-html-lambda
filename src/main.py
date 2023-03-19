@@ -19,11 +19,6 @@ s3 = boto3.client('s3')
 
 bucket = os.environ['BUCKET_NAME']
 
-# opener = urllib.request.FancyURLopener({})
-# url = "http://stackoverflow.com/"
-# f = opener.open(url)
-# content = f.read()
-
 def download_s3_file(bucket: str, file_key: str) -> str:
     """Downloads a file from s3 to `/tmp/[File Key]`.
 
@@ -68,23 +63,12 @@ def upload_file_to_s3(bucket: str, filename: str) -> Optional[str]:
 def lambda_handler(event, context):
     logger.info(event)
 
-    # bucket is always required
-    try:
-        bucket = event['bucket']
-    except KeyError:
-        error_message = 'Missing required "bucket" parameter from request payload.'
-        logger.error(error_message)
-        return {
-            'status': 400,
-            'body': json.dumps(error_message),
-        }
-
+    # TODO: secure the string by regex validation (regex pattern from env)
     try:
         url = event['url']
     except KeyError:
         url = None
 
-    # html_string and file_key are conditionally required, so let's try to get both
     try:
         file_key = event['file_key']
     except KeyError:

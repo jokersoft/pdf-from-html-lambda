@@ -6,6 +6,12 @@
 ## wkhtmltopdf layer
 `arn:aws:lambda:eu-central-1:087756641496:layer:wkhtmltopdf:1`
 
+## Runtime environment
+Variables expected to inject:
+```shell
+BUCKET_NAME=jokersoft.pdf-test
+```
+
 ## Event payload
 From html file on S3 to pdf file on S3 
 ```json
