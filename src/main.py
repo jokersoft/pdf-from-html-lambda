@@ -17,6 +17,8 @@ logger.setLevel(logging.INFO)
 # Get the s3 client
 s3 = boto3.client('s3')
 
+bucket = os.environ['BUCKET_NAME']
+
 # opener = urllib.request.FancyURLopener({})
 # url = "http://stackoverflow.com/"
 # f = opener.open(url)
@@ -77,6 +79,11 @@ def lambda_handler(event, context):
             'body': json.dumps(error_message),
         }
 
+    try:
+        url = event['url']
+    except KeyError:
+        url = None
+
     # html_string and file_key are conditionally required, so let's try to get both
     try:
         file_key = event['file_key']
@@ -88,11 +95,9 @@ def lambda_handler(event, context):
     except KeyError:
         html_string = None
 
-    if file_key is None and html_string is None:
+    if file_key is None and html_string is None and url is None:
         error_message = (
-            'Missing both a "file_key" and "html_string" '
-            'from request payload. One of these must be '
-            'included.'
+            'One of "file_key", "html_string" or "url" must be present.'
         )
         logger.error(error_message)
         return {
@@ -125,9 +130,11 @@ def lambda_handler(event, context):
     # If not, we'll write the HTML string to a file
     if file_key is not None:
         local_filename = download_s3_file(bucket, file_key)
-    else:
+        local_filename_pdf = local_filename.replace('.html', '.pdf')
+    elif html_string is not None:
         timestamp = str(datetime.now()).replace('.', '').replace(' ', '_')
         local_filename = f'/tmp/{timestamp}-html-string.html'
+        local_filename_pdf = local_filename.replace('.html', '.pdf')
 
         # Delete any existing files with that name
         try:
@@ -137,6 +144,8 @@ def lambda_handler(event, context):
 
         with open(local_filename, 'w') as f:
             f.write(html_string)
+    else:
+        local_filename_pdf = 'url.pdf'
 
     logger.info('Preparing to run the command')
     # Now we can create our command string to execute and upload the result to s3
@@ -145,7 +154,10 @@ def lambda_handler(event, context):
         if key == 'title':
             value = f'"{value}"'
         command += ' --{0} {1}'.format(key, value)
-    command += ' {0} {1}'.format(local_filename, local_filename.replace('.html', '.pdf'))
+    if url is not None:
+        command += ' {0} {1}'.format(url, local_filename_pdf)
+    else:
+        command += ' {0} {1}'.format(local_filename, local_filename_pdf)
 
     # Important! Remember, we said that we are assuming we're accepting valid HTML
     # this should always be checked to avoid allowing any string to be executed
@@ -153,7 +165,7 @@ def lambda_handler(event, context):
     # can be multiple words.
     subprocess.run(command, shell=True)
     logger.info('Successfully generated the PDF.')
-    file_key = upload_file_to_s3(bucket, local_filename.replace('.html', '.pdf'))
+    file_key = upload_file_to_s3(bucket, local_filename_pdf)
 
     if file_key is None:
         error_message = (

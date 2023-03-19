@@ -5,3 +5,43 @@
 
 ## wkhtmltopdf layer
 `arn:aws:lambda:eu-central-1:087756641496:layer:wkhtmltopdf:1`
+
+## Event payload
+From html file on S3 to pdf file on S3 
+```json
+{
+  "bucket": "jokersoft.pdf-test",
+  "file_key": "index.html",
+  "wkhtmltopdf_options": {
+    "orientation": "portrait",
+    "title": "Test PDF Generation",
+    "margin": "10mm 10mm 10mm 10mm"
+  }
+}
+```
+
+From html string to pdf file on S3
+```json
+{
+  "bucket": "jokersoft.pdf-test",
+  "html_string": "<!DOCTYPE html><html><head></head><body>This is an example of a simple HTML page.</body></html>",
+  "wkhtmltopdf_options": {
+    "orientation": "portrait",
+    "title": "Test PDF Generation",
+    "margin": "10mm 10mm 10mm 10mm"
+  }
+}
+```
+
+From url to pdf file on S3
+```json
+{
+  "bucket": "jokersoft.pdf-test",
+  "url": "https://stackoverflow.com",
+  "wkhtmltopdf_options": {
+    "orientation": "portrait",
+    "title": "Test PDF Generation",
+    "margin": "10mm 10mm 10mm 10mm"
+  }
+}
+```
