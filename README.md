@@ -1,3 +1,7 @@
+pdf-from-html-lambda
+===
+Tools, required to produce pdf from html on AWS platform.
+
 # Links
 - Python Lambda code based on: https://dev.to/bschoeneweis/converting-html-to-a-pdf-using-python-aws-lambda-and-wkhtmltopdf-3mdh
 - https://tech.mybuilder.com/compiling-wkhtmltopdf-aws-lambda-with-bref-easier-than-you-think/
@@ -6,6 +10,15 @@
 
 # wkhtmltopdf layer
 `arn:aws:lambda:eu-central-1:087756641496:layer:wkhtmltopdf:1`
+Layer is private ATM.
+
+## Build wkhtmltopdf layer:
+1. Auth in AWS
+2. [Download](https://wkhtmltopdf.org/downloads.html) your version from original source 
+3. Do something like:
+```shell
+aws lambda publish-layer-version --layer-name wkhtmltopdf --description "standalone wkhtmltopdf binary" --zip-file fileb://wkhtmltox-0.12.6-4.amazonlinux2_lambda.zip
+```
 
 ## Also
 https://github.com/brandonlim-hs/fonts-aws-lambda-layer my solve fonts issue.
