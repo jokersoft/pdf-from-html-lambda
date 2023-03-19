@@ -17,6 +17,7 @@ logger.setLevel(logging.INFO)
 # Get the s3 client
 s3 = boto3.client('s3')
 
+local_tmp_folder = '/tmp/'
 bucket = os.environ['BUCKET_NAME']
 
 def download_s3_file(bucket: str, file_key: str) -> str:
@@ -49,7 +50,7 @@ def upload_file_to_s3(bucket: str, filename: str) -> Optional[str]:
     """
     file_key = None
     try:
-        file_key = filename.replace('/tmp/', '')
+        file_key = filename.replace(local_tmp_folder, '')
         s3.upload_file(Filename=filename, Bucket=bucket, Key=file_key)
         logger.info('Successfully uploaded the PDF to %s as %s'
                     % (bucket, file_key))
@@ -117,7 +118,7 @@ def lambda_handler(event, context):
         local_filename_pdf = local_filename.replace('.html', '.pdf')
     elif html_string is not None:
         timestamp = str(datetime.now()).replace('.', '').replace(' ', '_')
-        local_filename = f'/tmp/{timestamp}-html-string.html'
+        local_filename = f'{local_tmp_folder}{timestamp}-html-to-pdf.html'
         local_filename_pdf = local_filename.replace('.html', '.pdf')
 
         # Delete any existing files with that name
