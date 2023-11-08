@@ -19,6 +19,11 @@ s3 = boto3.client('s3')
 
 local_tmp_folder = '/tmp/'
 bucket = os.environ['BUCKET_NAME']
+project_name = os.environ['PROJECT_NAME']
+try:
+    default_bucket_folder = os.environ['DEFAULT_BUCKET_FOLDER']
+except KeyError:
+    default_bucket_folder = 'tmp/'
 
 def download_s3_file(bucket: str, file_key: str) -> str:
     """Downloads a file from s3 to `/tmp/[File Key]`.
@@ -30,14 +35,15 @@ def download_s3_file(bucket: str, file_key: str) -> str:
     Returns:
         The local file name as a string.
     """
-    local_filename = f'/tmp/{file_key}'
-    s3.download_file(Bucket=bucket, Key=file_key, Filename=local_filename)
-    logger.info('Downloaded HTML file to %s' % local_filename)
+    local_filename = os.path.basename(file_key)
+    local_full_filename = f'{local_tmp_folder}{local_filename}'
+    s3.download_file(Bucket=bucket, Key=file_key, Filename=local_full_filename)
+    logger.info('Downloaded HTML file to %s' % local_full_filename)
 
-    return local_filename
+    return local_full_filename
 
 
-def upload_file_to_s3(bucket: str, filename: str) -> Optional[str]:
+def upload_file_to_s3(bucket: str, bucket_key: str, local_filename:str) -> Optional[str]:
     """Uploads the generated PDF to s3.
 
     Args:
@@ -48,18 +54,15 @@ def upload_file_to_s3(bucket: str, filename: str) -> Optional[str]:
         The file key of the file in s3 if the upload was successful.
         If the upload failed, then `None` will be returned.
     """
-    file_key = None
     try:
-        file_key = filename.replace(local_tmp_folder, '')
-        s3.upload_file(Filename=filename, Bucket=bucket, Key=file_key)
+        s3.upload_file(Filename=local_filename, Bucket=bucket, Key=bucket_key)
         logger.info('Successfully uploaded the PDF to %s as %s'
-                    % (bucket, file_key))
+                    % (bucket, bucket_key))
     except ClientError as e:
-        logger.error('Failed to upload file to s3.')
+        logger.error('Failed to upload file to s3: %s' % (bucket_key))
         logger.error(e)
-        file_key = None
 
-    return file_key
+    return bucket_key
 
 def lambda_handler(event, context):
     logger.info(event)
@@ -89,6 +92,11 @@ def lambda_handler(event, context):
             'status': 400,
             'body': json.dumps(error_message),
         }
+
+    try:
+        target_bucket_folder = event['folder']
+    except KeyError:
+        target_bucket_folder = default_bucket_folder
 
     # Now we can check for the option wkhtmltopdf_options and map them to values
     # Again, part of our assumptions are that these are valid
@@ -130,7 +138,7 @@ def lambda_handler(event, context):
         with open(local_filename, 'w') as f:
             f.write(html_string)
     else:
-        local_filename_pdf = 'url.pdf'
+        local_filename_pdf = f'{local_tmp_folder}url.pdf'
 
     logger.info('Preparing to run the command')
     # Now we can create our command string to execute and upload the result to s3
@@ -150,7 +158,8 @@ def lambda_handler(event, context):
     # can be multiple words.
     subprocess.run(command, shell=True)
     logger.info('Successfully generated the PDF.')
-    file_key = upload_file_to_s3(bucket, local_filename_pdf)
+    filename_pdf = os.path.basename(local_filename_pdf)
+    file_key = upload_file_to_s3(bucket, f'{project_name}/{target_bucket_folder}{filename_pdf}', local_filename_pdf)
 
     if file_key is None:
         error_message = (
@@ -164,6 +173,6 @@ def lambda_handler(event, context):
         }
 
     return {
-        'status': 200,
+        'status': 201,
         'file_key': file_key,
     }

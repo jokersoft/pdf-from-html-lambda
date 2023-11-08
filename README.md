@@ -10,6 +10,7 @@ Tools, required to produce pdf from html on AWS platform.
 
 # wkhtmltopdf layer
 `arn:aws:lambda:eu-central-1:087756641496:layer:wkhtmltopdf:1`
+
 Layer is private ATM.
 
 ## Build wkhtmltopdf layer:
@@ -38,12 +39,20 @@ wkhtmltopdf --title "Google.com as PDF" --margin-left "10mm" http://google.com g
 ```
 Try to find answers about possible arguments [here](https://wkhtmltopdf.org/docs.html)
 
+# Deploy Lambda
+```shell
+cd src
+zip artifact.zip main.py
+```
+
 # Event payload
-From html file on S3 to pdf file on S3 
+From html file on S3 to pdf file on S3
+
 ```json
 {
   "bucket": "jokersoft.pdf-test",
-  "file_key": "index.html",
+  "file_key": "om-test/reports/index.html",
+  "folder": "tmp/", // optional, default: tmp/ 
   "wkhtmltopdf_options": {
     "orientation": "portrait",
     "title": "Test PDF Generation",
