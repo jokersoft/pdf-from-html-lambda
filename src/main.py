@@ -154,6 +154,20 @@ def lambda_handler(event, context):
 
     # Now we can create our command string to execute and upload the result to s3
     command = 'wkhtmltopdf  --load-error-handling ignore'  # ignore unnecessary errors
+
+    # if header/footer required:
+    if header_html_string is not None:
+        tmp_header_file_path = f'{local_tmp_folder}/header.html'
+        with open(tmp_header_file_path, 'w') as file:
+            file.write(header_html_string)
+        command += f' --header-html {tmp_header_file_path}'
+
+    if footer_html_string is not None:
+        tmp_footer_file_path = f'{local_tmp_folder}/footer.html'
+        with open(tmp_footer_file_path, 'w') as file:
+            file.write(footer_html_string)
+        command += f' --footer-html {tmp_footer_file_path}'
+
     for key, value in wkhtmltopdf_options.items():
         if key == 'title':
             value = f'"{value}"'
@@ -163,25 +177,11 @@ def lambda_handler(event, context):
     else:
         command += ' {0} {1}'.format(local_filename, local_filename_pdf)
 
-    # if header/footer required:
-    if header_html_string is not None:
-        # TODO: write to tmp file, add command
-        tmp_header_file_path = f'{local_tmp_folder}/header.html'
-        with open(tmp_header_file_path, 'w') as file:
-            file.write(header_html_string)
-        command += f' --header-html {tmp_header_file_path}'
-
-    if footer_html_string is not None:
-        # TODO: write to tmp file, add command
-        tmp_footer_file_path = f'{local_tmp_folder}/footer.html'
-        with open(tmp_footer_file_path, 'w') as file:
-            file.write(footer_html_string)
-        command += f' --footer-html {tmp_footer_file_path}'
-
     # Important! Remember, we said that we are assuming we're accepting valid HTML
     # this should always be checked to avoid allowing any string to be executed
     # from this command. The reason we use shell=True here is because our title
     # can be multiple words.
+    logger.info(f'Running the command: {command}')
     subprocess.run(command, shell=True)
     logger.info('Successfully generated the PDF.')
     filename_pdf = os.path.basename(local_filename_pdf)
