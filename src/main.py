@@ -185,6 +185,7 @@ def lambda_handler(event, context):
     subprocess.run(command, shell=True)
     logger.info('Successfully generated the PDF.')
     filename_pdf = os.path.basename(local_filename_pdf)
+    file_size = os.path.getsize(local_filename_pdf)
     file_key = upload_file_to_s3(bucket, f'{project_name}/{target_bucket_folder}{filename_pdf}', local_filename_pdf)
 
     if file_key is None:
@@ -201,4 +202,5 @@ def lambda_handler(event, context):
     return {
         'status': 201,
         'file_key': file_key,
+        'file_size': file_size,
     }
