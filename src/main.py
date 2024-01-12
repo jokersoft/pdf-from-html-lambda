@@ -17,7 +17,7 @@ logger.setLevel(logging.INFO)
 # Get the s3 client
 s3 = boto3.client('s3')
 
-local_tmp_folder = '/tmp/'
+local_tmp_folder = '/tmp'
 bucket = os.environ['BUCKET_NAME']
 project_name = os.environ['PROJECT_NAME']
 try:
@@ -36,7 +36,7 @@ def download_s3_file(bucket: str, file_key: str) -> str:
         The local file name as a string.
     """
     local_filename = os.path.basename(file_key)
-    local_full_filename = f'{local_tmp_folder}{local_filename}'
+    local_full_filename = f'{local_tmp_folder}/{local_filename}'
     s3.download_file(Bucket=bucket, Key=file_key, Filename=local_full_filename)
     logger.info('Downloaded HTML file to %s' % local_full_filename)
 
@@ -83,6 +83,16 @@ def lambda_handler(event, context):
     except KeyError:
         html_string = None
 
+    try:
+        header_html_string = event['header_html_string']
+    except KeyError:
+        header_html_string = None
+
+    try:
+        footer_html_string = event['footer_html_string']
+    except KeyError:
+        footer_html_string = None
+
     if file_key is None and html_string is None and url is None:
         error_message = (
             'One of "file_key", "html_string" or "url" must be present.'
@@ -126,7 +136,7 @@ def lambda_handler(event, context):
         local_filename_pdf = local_filename.replace('.html', '.pdf')
     elif html_string is not None:
         timestamp = str(datetime.now()).replace('.', '').replace(' ', '_')
-        local_filename = f'{local_tmp_folder}{timestamp}-html-to-pdf.html'
+        local_filename = f'{local_tmp_folder}/{timestamp}-html-to-pdf.html'
         local_filename_pdf = local_filename.replace('.html', '.pdf')
 
         # Delete any existing files with that name
@@ -138,11 +148,26 @@ def lambda_handler(event, context):
         with open(local_filename, 'w') as f:
             f.write(html_string)
     else:
-        local_filename_pdf = f'{local_tmp_folder}url.pdf'
+        local_filename_pdf = f'{local_tmp_folder}/url.pdf'
 
     logger.info('Preparing to run the command')
+
     # Now we can create our command string to execute and upload the result to s3
-    command = 'wkhtmltopdf  --load-error-handling ignore'  # ignore unecessary errors
+    command = 'wkhtmltopdf  --load-error-handling ignore'  # ignore unnecessary errors
+
+    # if header/footer required:
+    if header_html_string is not None:
+        tmp_header_file_path = f'{local_tmp_folder}/header.html'
+        with open(tmp_header_file_path, 'w') as file:
+            file.write(header_html_string)
+        command += f' --header-html {tmp_header_file_path}'
+
+    if footer_html_string is not None:
+        tmp_footer_file_path = f'{local_tmp_folder}/footer.html'
+        with open(tmp_footer_file_path, 'w') as file:
+            file.write(footer_html_string)
+        command += f' --footer-html {tmp_footer_file_path}'
+
     for key, value in wkhtmltopdf_options.items():
         if key == 'title':
             value = f'"{value}"'
@@ -156,6 +181,7 @@ def lambda_handler(event, context):
     # this should always be checked to avoid allowing any string to be executed
     # from this command. The reason we use shell=True here is because our title
     # can be multiple words.
+    logger.info(f'Running the command: {command}')
     subprocess.run(command, shell=True)
     logger.info('Successfully generated the PDF.')
     filename_pdf = os.path.basename(local_filename_pdf)
