@@ -108,6 +108,11 @@ def lambda_handler(event, context):
     except KeyError:
         target_bucket_folder = default_bucket_folder
 
+    try:
+        target_file_name = event['target_file_name']
+    except KeyError:
+        target_file_name = None
+
     # Now we can check for the option wkhtmltopdf_options and map them to values
     # Again, part of our assumptions are that these are valid
     wkhtmltopdf_options = {}
@@ -184,7 +189,10 @@ def lambda_handler(event, context):
     logger.info(f'Running the command: {command}')
     subprocess.run(command, shell=True)
     logger.info('Successfully generated the PDF.')
-    filename_pdf = os.path.basename(local_filename_pdf)
+    if target_file_name is not None:
+        filename_pdf = f'{target_file_name}.pdf'
+    else:
+        filename_pdf = os.path.basename(local_filename_pdf)
     file_size = os.path.getsize(local_filename_pdf)
     file_key = upload_file_to_s3(bucket, f'{project_name}/{target_bucket_folder}{filename_pdf}', local_filename_pdf)
 
