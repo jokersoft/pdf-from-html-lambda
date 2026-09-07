@@ -29,6 +29,10 @@ https://github.com/brandonlim-hs/fonts-aws-lambda-layer my solve fonts issue.
 Variables expected to inject:
 ```shell
 BUCKET_NAME=jokersoft.pdf-test
+# Prefixes every generated key: s3://$BUCKET_NAME/$APP_NAME/<folder>/<file>.pdf
+# Must match the calling app's own APP_NAME -- it strips that prefix off the
+# returned file_key before reading the object back.
+APP_NAME=om-api-test
 ```
 
 ## Run wkhtmltopdf pdf generation locally

@@ -19,7 +19,7 @@ s3 = boto3.client('s3')
 
 local_tmp_folder = '/tmp'
 bucket = os.environ['BUCKET_NAME']
-project_name = os.environ['PROJECT_NAME']
+app_name = os.environ['APP_NAME']
 try:
     default_bucket_folder = os.environ['DEFAULT_BUCKET_FOLDER']
 except KeyError:
@@ -194,7 +194,7 @@ def lambda_handler(event, context):
     else:
         filename_pdf = os.path.basename(local_filename_pdf)
     file_size = os.path.getsize(local_filename_pdf)
-    file_key = upload_file_to_s3(bucket, f'{project_name}/{target_bucket_folder}{filename_pdf}', local_filename_pdf)
+    file_key = upload_file_to_s3(bucket, f'{app_name}/{target_bucket_folder}{filename_pdf}', local_filename_pdf)
 
     if file_key is None:
         error_message = (
