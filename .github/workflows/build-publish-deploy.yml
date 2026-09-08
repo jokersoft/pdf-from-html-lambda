@@ -1,31 +1,26 @@
-name: Build publish deploy test-api
+name: Publish lambda artifact
+
+# Publishes src/main.py as the versioned artifact zip that om-be's Terraform points
+# aws_lambda_function.pdf at. This workflow does NOT deploy: om-be pins the version in
+# infrastructure/terraform/backend/<env>/terraform.tfvars (pdf_lambda_source_version), and
+# the new code only goes live on the next `terraform apply` there.
 
 on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Commit or short-sha tag to build'
+        description: 'Artifact version to publish, e.g. v0.0.2 (must match om-be pdf_lambda_source_version)'
         required: true
-      disable_cache:
-        description: 'Disable cache for Docker build'
-        required: false
-        default: false
-        type: boolean
-  push:
-    branches:
-      - main
 
 env:
-  APP_NAME: pdf-from-html
-  APP_ENV: prod
-  ENVIRONMENT: test
-  AWS_ECR_REPOSITORY: pdf-from-html
   AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
   AWS_REGION: ${{ secrets.AWS_REGION }}
   AWS_ASSUME_ROLE_NAME: orgamanager-gha-role
+  ARTIFACT_BUCKET: om3-lambda-artifacts
+  ARTIFACT_PREFIX: pdf-from-html
 
 jobs:
-  build-publish-deploy:
+  publish:
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
@@ -35,23 +30,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          lfs: true
-
-      - name: Set version for push to main
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: echo "version=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
-
-      - run: git checkout ${{ github.event.inputs.version || env.version  }}
-
-      - name: Define FULL_IMAGE_TAG
-        run: echo "FULL_IMAGE_TAG=${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.AWS_ECR_REPOSITORY }}:${{ github.event.inputs.version || env.version }}" >> $GITHUB_ENV
-
-      - name: Check if image already exists
-        run: |
-          IMAGE_EXISTS=$(aws ecr describe-images --repository-name ${{ env.AWS_ECR_REPOSITORY }} --image-ids imageTag=${{ github.event.inputs.version || env.version }} --region ${{ env.AWS_REGION }} | jq -r '.imageDetails | length > 0')
-          echo "IMAGE_EXISTS=$IMAGE_EXISTS" >> $GITHUB_ENV
 
       - name: configure aws credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -60,53 +38,31 @@ jobs:
           role-to-assume: arn:aws:iam::${{ env.AWS_ACCOUNT_ID }}:role/${{ env.AWS_ASSUME_ROLE_NAME }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Log in to Amazon ECR
-        id: ecr-login
-        uses: aws-actions/amazon-ecr-login@v2
+      - name: Define artifact key
+        run: echo "ARTIFACT_KEY=${{ env.ARTIFACT_PREFIX }}/${{ inputs.version }}/artifact.zip" >> $GITHUB_ENV
 
-      - name: Copy .env.example to .env
-        run: cp .env.ci .env
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Create and use a new builder instance
+      - name: Refuse to overwrite an existing version
         run: |
-          docker buildx create --use --name mybuilder --driver docker-container --buildkitd-flags '--allow-insecure-entitlement security.insecure'
-          docker buildx inspect mybuilder --bootstrap
+          if aws s3api head-object --bucket "$ARTIFACT_BUCKET" --key "$ARTIFACT_KEY" >/dev/null 2>&1; then
+            echo "::error::s3://$ARTIFACT_BUCKET/$ARTIFACT_KEY already exists."
+            echo "aws_lambda_function.pdf has no source_code_hash, so it tracks the KEY, not the"
+            echo "content. Overwriting in place would NOT redeploy the code. Publish a new version."
+            exit 1
+          fi
 
-      - name: Build Docker image, remote version, with caching
-        uses: docker/build-push-action@v6
-        with:
-          context: ./
-          file: ./Dockerfile
-          push: true
-          load: false # make image available for local Docker commands
-          tags: ${{ env.FULL_IMAGE_TAG }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          build-args: |
-            APP_NAME=${{ env.APP_NAME }}
-            APP_ENV=${{ env.APP_ENV }}
+      - name: Build artifact
+        run: cd src && zip artifact.zip main.py
 
-      - name: Install Terraform
-        uses: hashicorp/setup-terraform@v3.1.2
-        with:
-          terraform_version: 1.10.5
+      - name: Upload artifact
+        run: aws s3 cp src/artifact.zip "s3://$ARTIFACT_BUCKET/$ARTIFACT_KEY"
 
-      - name: Update ECS Task Definition
-        run: |
-          cd infrastructure/terraform/backend/${{ env.ENVIRONMENT }}
-          terraform init
-          terraform apply -auto-approve -var="image_tag=${{ github.event.inputs.version || env.version }}"  
-
-      - uses: actions/github-script@v6
+      - uses: actions/github-script@v7
         with:
           script: |
             core.summary
-              .addHeading('Build Summary')
-              .addTable([
-                [{data: 'Version', header: true}, {data: 'Full image tag', header: true}],
-                ['${{ github.event.inputs.version || env.version }}', '${{ env.FULL_IMAGE_TAG }}']
-              ])
+              .addHeading('Lambda artifact published')
+              .addRaw('`s3://${{ env.ARTIFACT_BUCKET }}/${{ env.ARTIFACT_KEY }}`')
+              .addRaw('\n\nNot deployed yet. In om-be, set ')
+              .addRaw('`pdf_lambda_source_version = "${{ inputs.version }}"` in ')
+              .addRaw('`infrastructure/terraform/backend/<env>/terraform.tfvars`, then apply.')
               .write()
